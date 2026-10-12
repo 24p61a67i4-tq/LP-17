@@ -1,14 +1,18 @@
-# Production-appropriate Nginx Alpine image for serving static frontend
-FROM nginx:alpine
+# Node.js runtime for Express backend + static frontend serving
+FROM node:18-alpine
 
-# Remove default Nginx static assets
-RUN rm -rf /usr/share/nginx/html/*
+# Set working directory
+WORKDIR /app
 
-# Copy application static files to Nginx web root
-COPY index.html style.css script.js /usr/share/nginx/html/
+# Copy package files and install dependencies
+COPY package.json ./
+RUN npm install --production
 
-# Expose HTTP port 80
-EXPOSE 80
+# Copy application files
+COPY server.js index.html style.css script.js ./
 
-# Run Nginx in foreground
-CMD ["nginx", "-g", "daemon off;"]
+# Expose application port
+EXPOSE 3000
+
+# Start the server
+CMD ["node", "server.js"]

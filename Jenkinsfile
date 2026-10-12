@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME     = 'oneclick-devops'
         CONTAINER_NAME = 'oneclick-devops-app'
         HOST_PORT      = '8085'
-        CONTAINER_PORT = '80'
+        CONTAINER_PORT = '3000'
     }
 
     stages {
@@ -30,6 +30,14 @@ pipeline {
                     )
                     if not exist script.js (
                         echo ERROR: script.js is missing!
+                        exit /b 1
+                    )
+                    if not exist server.js (
+                        echo ERROR: server.js is missing!
+                        exit /b 1
+                    )
+                    if not exist package.json (
+                        echo ERROR: package.json is missing!
                         exit /b 1
                     )
                     if not exist Dockerfile (

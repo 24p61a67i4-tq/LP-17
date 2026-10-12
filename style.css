@@ -682,3 +682,63 @@ textarea {
     }
 
 }
+
+
+/* ================= NOTIFICATION TOAST ================= */
+
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3);
+    z-index: 9999;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+}
+
+.notification.show {
+    transform: translateX(0);
+}
+
+
+/* ================= DELETE BUTTON ================= */
+
+.delete-btn {
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    background: #ef4444;
+    color: #fff;
+}
+
+.project-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+
+/* ================= PROVISION SUCCESS STATE ================= */
+
+.provision-success .loader {
+    border-top-color: #10b981;
+    animation: none;
+}
+
+.provision-success {
+    border-color: #10b981;
+}

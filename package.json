@@ -1,0 +1,17 @@
+{
+  "name": "oneclick-devops",
+  "version": "1.0.0",
+  "description": "OneClick DevOps - Environment Provisioning & Deployment System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test_backend.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sql.js": "^1.11.0",
+    "cors": "^2.8.5",
+    "uuid": "^11.1.0"
+  }
+}

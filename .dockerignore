@@ -5,3 +5,6 @@
 .vscode/
 .idea/
 *.log
+node_modules/
+oneclick.db
+oneclick.sqlite

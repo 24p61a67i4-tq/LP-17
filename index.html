@@ -128,7 +128,7 @@
                 <div class="stat-card">
                     <div class="stat-icon orange">✓</div>
                     <div>
-                        <h3>100%</h3>
+                        <h3 id="successRate">100%</h3>
                         <p>Success Rate</p>
                     </div>
                 </div>
@@ -208,7 +208,7 @@
                         <h2>System Status</h2>
                     </div>
 
-                    <div class="system-status">
+                    <div class="system-status" id="systemStatus">
 
                         <div>
                             <span>Jenkins</span>
@@ -424,7 +424,7 @@
 
                             <label>Region</label>
 
-                            <select>
+                            <select id="region">
 
                                 <option>India - Hyderabad</option>
                                 <option>India - Mumbai</option>
@@ -444,7 +444,7 @@
 
                             <label>Instance Type</label>
 
-                            <select>
+                            <select id="instance">
 
                                 <option>Small</option>
                                 <option>Medium</option>
@@ -459,7 +459,7 @@
 
                             <label>Docker</label>
 
-                            <select>
+                            <select id="docker">
 
                                 <option>Enabled</option>
                                 <option>Disabled</option>
@@ -476,6 +476,7 @@
                         <label>Environment Description</label>
 
                         <textarea
+                            id="envDescription"
                             placeholder="Enter environment description..."
                         ></textarea>
 
@@ -703,7 +704,7 @@
             </div>
 
 
-            <div class="card settings-card">
+            <div class="card settings-card" id="settingsContainer">
 
                 <div class="setting">
 

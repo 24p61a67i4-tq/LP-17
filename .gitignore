@@ -1,0 +1,5 @@
+node_modules/
+oneclick.db
+oneclick.sqlite
+*.log
+.DS_Store
