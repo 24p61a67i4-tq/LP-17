@@ -8,3 +8,5 @@
 node_modules/
 oneclick.db
 oneclick.sqlite
+data/
+test_backend.js

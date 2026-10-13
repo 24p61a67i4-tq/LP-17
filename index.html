@@ -249,7 +249,7 @@
                     <p>Manage your application projects.</p>
                 </div>
 
-                <button class="primary-btn" onclick="addProject()">
+                <button class="primary-btn" onclick="openProjectModal()">
                     + Add Project
                 </button>
             </div>
@@ -510,6 +510,30 @@
 
             </div>
 
+            <!-- Active Environments Table -->
+            <div class="card" style="margin-top: 25px;">
+                <div class="card-header">
+                    <h2>Active Environments</h2>
+                    <button class="small-btn" onclick="loadEnvironments()">Refresh</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Environment</th>
+                            <th>Project</th>
+                            <th>Cloud / Region</th>
+                            <th>Instance</th>
+                            <th>Endpoint URL</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="environmentsTable">
+                        <!-- Loaded dynamically from API -->
+                    </tbody>
+                </table>
+            </div>
+
         </section>
 
 
@@ -525,7 +549,7 @@
                 </div>
 
                 <button class="primary-btn"
-                        onclick="deployProject('Web Application')">
+                        onclick="openDeployModal()">
                     🚀 New Deployment
                 </button>
 
@@ -634,10 +658,11 @@
                     <p>Monitor provisioning and deployment activity.</p>
                 </div>
 
-                <button class="secondary-btn"
-                        onclick="clearLogs()">
-                    Clear Logs
-                </button>
+                <div class="logs-controls">
+                    <input type="text" id="logSearchInput" placeholder="Filter logs (e.g. DEPLOY, DOCKER)..." oninput="filterLogs()" />
+                    <button class="small-btn" onclick="loadLogs()">Refresh</button>
+                    <button class="secondary-btn" onclick="clearLogs()">Clear Logs</button>
+                </div>
 
             </div>
 
@@ -767,6 +792,84 @@
 
 
     </main>
+
+
+    <!-- Add Project Modal -->
+    <div id="projectModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2>Create New Project</h2>
+                <button class="close-btn" onclick="closeProjectModal()">&times;</button>
+            </div>
+            <form id="projectModalForm">
+                <div class="form-group">
+                    <label for="modalProjectName">Project Name *</label>
+                    <input type="text" id="modalProjectName" required placeholder="e.g. Analytics Engine" />
+                </div>
+                <div class="form-group">
+                    <label for="modalProjectDesc">Description</label>
+                    <textarea id="modalProjectDesc" placeholder="Describe the application architecture and service role..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modalProjectRepo">Git Repository URL</label>
+                        <input type="url" id="modalProjectRepo" placeholder="https://github.com/org/repo" />
+                    </div>
+                    <div class="form-group">
+                        <label for="modalProjectIcon">Project Icon</label>
+                        <select id="modalProjectIcon">
+                            <option value="📦">📦 Package</option>
+                            <option value="🌐">🌐 Web Service</option>
+                            <option value="💳">💳 Payment API</option>
+                            <option value="📱">📱 Mobile API</option>
+                            <option value="⚡">⚡ Microservice</option>
+                            <option value="⚙️">⚙️ Background Worker</option>
+                            <option value="🔒">🔒 Auth Service</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-btn" onclick="closeProjectModal()">Cancel</button>
+                    <button type="submit" class="primary-btn">Create Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Trigger Deployment Modal -->
+    <div id="deployModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2>Trigger Deployment Pipeline</h2>
+                <button class="close-btn" onclick="closeDeployModal()">&times;</button>
+            </div>
+            <form id="deployModalForm">
+                <div class="form-group">
+                    <label for="deployModalProject">Target Project *</label>
+                    <select id="deployModalProject" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="deployModalEnv">Target Environment *</label>
+                        <select id="deployModalEnv">
+                            <option value="Development">Development</option>
+                            <option value="Testing">Testing</option>
+                            <option value="Staging">Staging</option>
+                            <option value="Production">Production</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="deployModalVersion">Release Version *</label>
+                        <input type="text" id="deployModalVersion" value="v1.0.0" required />
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-btn" onclick="closeDeployModal()">Cancel</button>
+                    <button type="submit" class="primary-btn">🚀 Launch Deployment</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
 
     <script src="script.js"></script>

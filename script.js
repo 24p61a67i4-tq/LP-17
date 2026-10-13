@@ -1,649 +1,701 @@
-/* =========================================
-   ONECLICK DEVOPS JAVASCRIPT
-   Connected to Express Backend API
-========================================= */
+/* =============================================
+   ONECLICK DEVOPS - CLIENT JAVASCRIPT
+   Production REST Client & UI Controller
+============================================= */
 
-const API_BASE = '';  // Same origin
+const API_BASE = ''; // Same-origin REST API
 
+let deploymentPollingTimer = null;
+let logFilterDebounce = null;
 
-/* =========================================
-   NAVIGATION
-========================================= */
+/* =============================================
+   NAVIGATION & TAB ROUTING
+============================================= */
 
 function showSection(sectionId, button) {
+    const sections = document.querySelectorAll('.section');
+    sections.forEach(sec => sec.classList.remove('active'));
 
-    // Hide all sections
-    var sections = document.querySelectorAll(".section");
-
-    sections.forEach(function(section) {
-        section.classList.remove("active");
-    });
-
-
-    // Show selected section
-    var selectedSection = document.getElementById(sectionId);
-
+    const selectedSection = document.getElementById(sectionId);
     if (selectedSection) {
-        selectedSection.classList.add("active");
+        selectedSection.classList.add('active');
     }
 
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach(btn => btn.classList.remove('active'));
 
-    // Remove active from navigation buttons
-    var buttons = document.querySelectorAll(".nav-btn");
-
-    buttons.forEach(function(btn) {
-        btn.classList.remove("active");
-    });
-
-
-    // Add active to clicked button
     if (button) {
-        button.classList.add("active");
+        button.classList.add('active');
     } else {
-        // Find matching nav button
-        buttons.forEach(function(btn) {
+        navButtons.forEach(btn => {
             if (btn.textContent.toLowerCase().includes(sectionId)) {
-                btn.classList.add("active");
+                btn.classList.add('active');
             }
         });
     }
 
-
-    // Update page title
-    var titles = {
-        dashboard:   "Dashboard",
-        projects:    "Projects",
-        provision:   "Provision Environment",
-        deployments: "Deployments",
-        logs:        "Deployment Logs",
-        settings:    "Settings"
+    const titles = {
+        dashboard: 'Dashboard',
+        projects: 'Projects',
+        provision: 'Provision Environment',
+        deployments: 'Deployments',
+        logs: 'Deployment Logs',
+        settings: 'Settings'
     };
+    const titleElem = document.getElementById('pageTitle');
+    if (titleElem) {
+        titleElem.innerText = titles[sectionId] || 'Dashboard';
+    }
 
-    document.getElementById("pageTitle").innerText =
-        titles[sectionId] || "Dashboard";
-
-
-    // Refresh data when switching sections
+    // Refresh data for the active section
     if (sectionId === 'dashboard')   loadDashboard();
     if (sectionId === 'projects')    loadProjects();
+    if (sectionId === 'provision')   { loadProjects(); loadEnvironments(); }
     if (sectionId === 'deployments') loadDeployments();
     if (sectionId === 'logs')        loadLogs();
     if (sectionId === 'settings')    loadSettings();
 }
 
+/* =============================================
+   DASHBOARD
+============================================= */
 
-/* =========================================
-   DASHBOARD - Load Stats & Recent Data
-========================================= */
+async function loadDashboard() {
+    try {
+        const res = await fetch(`${API_BASE}/api/dashboard`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
 
-function loadDashboard() {
+        // Stats Cards
+        safeSetText('projectCount', data.stats.projects);
+        safeSetText('environmentCount', data.stats.environments);
+        safeSetText('deploymentCount', data.stats.deployments);
+        safeSetText('successRate', data.stats.successRate);
 
-    fetch(API_BASE + '/api/dashboard')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-
-            // Update stat cards
-            document.getElementById("projectCount").innerText =
-                data.stats.projects;
-
-            document.getElementById("environmentCount").innerText =
-                data.stats.environments;
-
-            document.getElementById("deploymentCount").innerText =
-                data.stats.deployments;
-
-            document.getElementById("successRate").innerText =
-                data.stats.successRate;
-
-
-            // Update recent deployments table
-            var tbody = document.getElementById("deploymentTable");
+        // Recent Deployments Table
+        const tbody = document.getElementById('deploymentTable');
+        if (tbody) {
             tbody.innerHTML = '';
-
-            data.recentDeployments.forEach(function(dep) {
-
-                var statusClass = dep.status === 'Success'
-                    ? 'success'
-                    : (dep.status === 'Running' ? 'running' : 'failed');
-
-                var timeAgo = getTimeAgo(dep.created_at);
-
-                var row = document.createElement("tr");
-
-                row.innerHTML =
-                    '<td>' + dep.project_name + '</td>' +
-                    '<td>' + dep.environment + '</td>' +
-                    '<td><span class="status ' + statusClass + '">' +
-                        dep.status +
-                    '</span></td>' +
-                    '<td>' + timeAgo + '</td>';
-
-                tbody.appendChild(row);
-            });
-
-
-            // Update system status
-            var statusContainer =
-                document.getElementById("systemStatus");
-
-            if (statusContainer) {
-
-                statusContainer.innerHTML = '';
-
-                data.systemStatus.forEach(function(s) {
-
-                    var div = document.createElement("div");
-
-                    div.innerHTML =
-                        '<span>' + capitalise(s.key) + '</span>' +
-                        '<strong class="online">● ' + s.value + '</strong>';
-
-                    statusContainer.appendChild(div);
+            if (!data.recentDeployments || data.recentDeployments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8;">No deployments recorded yet.</td></tr>';
+            } else {
+                data.recentDeployments.forEach(dep => {
+                    const statusClass = getStatusClass(dep.status);
+                    const timeAgo = getTimeAgo(dep.created_at);
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${escapeHtml(dep.project_name)}</strong></td>
+                        <td>${escapeHtml(dep.environment)}</td>
+                        <td><span class="status ${statusClass}">${escapeHtml(dep.status)}</span></td>
+                        <td>${timeAgo}</td>
+                    `;
+                    tbody.appendChild(row);
                 });
             }
-        })
-        .catch(function(err) {
-            console.error('Failed to load dashboard:', err);
-        });
-}
+        }
 
-
-/* =========================================
-   PROJECTS - Load & Create
-========================================= */
-
-function loadProjects() {
-
-    fetch(API_BASE + '/api/projects')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(projects) {
-
-            var grid = document.getElementById("projectGrid");
-            grid.innerHTML = '';
-
-            projects.forEach(function(project) {
-
-                var card = document.createElement("div");
-                card.className = "project-card";
-
-                card.innerHTML =
-                    '<div class="project-top">' +
-                        '<div class="project-icon">' + project.icon + '</div>' +
-                        '<span class="status success">' + project.status + '</span>' +
-                    '</div>' +
-                    '<h3>' + project.name + '</h3>' +
-                    '<p>' + project.description + '</p>' +
-                    '<div class="project-info">' +
-                        '<span>🔗 GitHub</span>' +
-                        '<span>🐳 Docker</span>' +
-                    '</div>' +
-                    '<div class="project-actions">' +
-                        '<button class="secondary-btn" ' +
-                            'onclick="deployProject(\'' + escapeQuotes(project.name) + '\')">' +
-                            '🚀 Deploy' +
-                        '</button>' +
-                        '<button class="delete-btn" ' +
-                            'onclick="deleteProject(\'' + project.id + '\', \'' + escapeQuotes(project.name) + '\')">' +
-                            '🗑️' +
-                        '</button>' +
-                    '</div>';
-
-                grid.appendChild(card);
+        // System Status Indicators
+        const statusContainer = document.getElementById('systemStatus');
+        if (statusContainer && data.systemStatus) {
+            statusContainer.innerHTML = '';
+            data.systemStatus.forEach(s => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <span>${capitalise(s.key)}</span>
+                    <strong class="online">● ${escapeHtml(s.value)}</strong>
+                `;
+                statusContainer.appendChild(div);
             });
+        }
+    } catch (err) {
+        console.error('[CLIENT] Failed to load dashboard:', err.message);
+    }
+}
 
-            // Also update the provision form dropdown
-            updateProjectDropdown(projects);
-        })
-        .catch(function(err) {
-            console.error('Failed to load projects:', err);
+/* =============================================
+   PROJECTS
+============================================= */
+
+async function loadProjects() {
+    try {
+        const res = await fetch(`${API_BASE}/api/projects`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const projects = await res.json();
+
+        const grid = document.getElementById('projectGrid');
+        if (grid) {
+            grid.innerHTML = '';
+            if (projects.length === 0) {
+                grid.innerHTML = '<p style="color:#94a3b8; grid-column: 1 / -1;">No projects registered yet. Click "+ Add Project" to create one.</p>';
+            } else {
+                projects.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = 'project-card';
+                    card.innerHTML = `
+                        <div class="project-top">
+                            <div class="project-icon">${p.icon || '📦'}</div>
+                            <span class="status success">${escapeHtml(p.status || 'Active')}</span>
+                        </div>
+                        <h3>${escapeHtml(p.name)}</h3>
+                        <p>${escapeHtml(p.description || '')}</p>
+                        <div class="project-info">
+                            <span>🔗 ${p.repo_url ? 'GitHub Linked' : 'Local'}</span>
+                            <span>🐳 Docker: ${escapeHtml(p.docker || 'Enabled')}</span>
+                        </div>
+                        <div class="project-actions">
+                            <button class="secondary-btn" onclick="openDeployModal('${escapeJsString(p.name)}')">
+                                🚀 Deploy
+                            </button>
+                            <button class="delete-btn" title="Delete Project" onclick="deleteProject('${p.id}', '${escapeJsString(p.name)}')">
+                                🗑️
+                            </button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+        }
+
+        // Keep all project select dropdowns synchronized
+        populateProjectDropdowns(projects);
+    } catch (err) {
+        console.error('[CLIENT] Failed to load projects:', err.message);
+        showNotification('Failed to load projects from server.', 'error');
+    }
+}
+
+function populateProjectDropdowns(projects) {
+    const dropdownIds = ['projectName', 'deployModalProject'];
+    dropdownIds.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const currentVal = select.value;
+        select.innerHTML = '';
+        projects.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.name;
+            select.appendChild(opt);
         });
+        if (currentVal) select.value = currentVal;
+    });
 }
 
+function openProjectModal() {
+    const modal = document.getElementById('projectModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('modalProjectName').focus();
+    }
+}
 
-function addProject() {
+function closeProjectModal() {
+    const modal = document.getElementById('projectModal');
+    if (modal) modal.classList.add('hidden');
+    const form = document.getElementById('projectModalForm');
+    if (form) form.reset();
+}
 
-    var name = prompt("Enter project name:");
+// Project Modal Form Submit
+document.addEventListener('DOMContentLoaded', () => {
+    const projectForm = document.getElementById('projectModalForm');
+    if (projectForm) {
+        projectForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('modalProjectName').value.trim();
+            const description = document.getElementById('modalProjectDesc').value.trim();
+            const repo_url = document.getElementById('modalProjectRepo').value.trim();
+            const icon = document.getElementById('modalProjectIcon').value;
 
-    if (!name || name.trim() === '') {
+            try {
+                const res = await fetch(`${API_BASE}/api/projects`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description, repo_url, icon })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error ? data.error.message : 'Failed to create project');
+                }
+
+                showNotification(`Project '${name}' created successfully!`);
+                closeProjectModal();
+                loadProjects();
+                loadDashboard();
+            } catch (err) {
+                showNotification(err.message, 'error');
+            }
+        });
+    }
+});
+
+async function deleteProject(id, name) {
+    if (!confirm(`Are you sure you want to delete project '${name}'? This cannot be undone.`)) {
         return;
     }
 
-    fetch(API_BASE + '/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() })
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function(project) {
+    try {
+        const res = await fetch(`${API_BASE}/api/projects/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error ? data.error.message : 'Failed to delete project');
+        }
+
+        showNotification(`Project '${name}' deleted.`);
         loadProjects();
         loadDashboard();
-    })
-    .catch(function(err) {
-        console.error('Failed to add project:', err);
-        alert('Failed to add project.');
-    });
-}
-
-
-function deleteProject(id, name) {
-
-    if (!confirm('Delete project "' + name + '"?')) {
-        return;
+    } catch (err) {
+        showNotification(err.message, 'error');
     }
-
-    fetch(API_BASE + '/api/projects/' + id, {
-        method: 'DELETE'
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function() {
-        loadProjects();
-        loadDashboard();
-    })
-    .catch(function(err) {
-        console.error('Failed to delete project:', err);
-    });
 }
 
-
-function updateProjectDropdown(projects) {
-
-    var select = document.getElementById("projectName");
-
-    if (!select) return;
-
-    select.innerHTML = '';
-
-    projects.forEach(function(project) {
-
-        var option = document.createElement("option");
-        option.value = project.name;
-        option.textContent = project.name;
-
-        select.appendChild(option);
-    });
-}
-
-
-/* =========================================
+/* =============================================
    PROVISION ENVIRONMENT
-========================================= */
+============================================= */
 
-document.getElementById("provisionForm")
-    .addEventListener("submit", function(event) {
+// Provision Form Submit Handler
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('provisionForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        event.preventDefault();
+            const projectName = document.getElementById('projectName').value;
+            const environment = document.getElementById('environment').value;
+            const cloud       = document.getElementById('cloud').value;
+            const region      = document.getElementById('region') ? document.getElementById('region').value : 'India - Hyderabad';
+            const instance    = document.getElementById('instance') ? document.getElementById('instance').value : 'Small';
+            const docker      = document.getElementById('docker') ? document.getElementById('docker').value : 'Enabled';
+            const description = document.getElementById('envDescription') ? document.getElementById('envDescription').value.trim() : '';
 
-        var projectName = document.getElementById("projectName").value;
-        var environment = document.getElementById("environment").value;
-        var cloud       = document.getElementById("cloud").value;
-        var region      = document.getElementById("region").value;
-        var instance    = document.getElementById("instance").value;
-        var docker      = document.getElementById("docker").value;
-        var description = document.getElementById("envDescription").value;
+            const statusDiv = document.getElementById('provisionStatus');
+            const title     = document.getElementById('provisionTitle');
+            const message   = document.getElementById('provisionMessage');
 
+            if (statusDiv) {
+                statusDiv.classList.remove('hidden', 'provision-success');
+                if (title) title.innerText = 'Provisioning Environment...';
+                if (message) message.innerText = `Allocating ${environment} environment on ${cloud} (${region})...`;
+            }
 
-        var statusDiv = document.getElementById("provisionStatus");
-        var title     = document.getElementById("provisionTitle");
-        var message   = document.getElementById("provisionMessage");
+            try {
+                const res = await fetch(`${API_BASE}/api/environments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        environment,
+                        cloud,
+                        region,
+                        instance,
+                        docker,
+                        description
+                    })
+                });
 
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error ? data.error.message : 'Provisioning failed');
+                }
 
-        // Show loading status
-        statusDiv.classList.remove("hidden");
-        statusDiv.classList.remove("provision-success");
+                if (title) title.innerText = 'Environment Created Successfully ✓';
+                if (message) message.innerText = `${projectName} (${environment}) is active on ${cloud}. Endpoint: ${data.endpoint_url || 'Assigned'}`;
+                if (statusDiv) statusDiv.classList.add('provision-success');
 
-        title.innerText   = "Provisioning Environment...";
-        message.innerText = "Creating " + environment + " environment on " + cloud + "...";
+                showNotification(`${projectName} (${environment}) provisioned!`);
+                loadEnvironments();
+                loadDashboard();
+            } catch (err) {
+                if (title) title.innerText = 'Provisioning Failed ✗';
+                if (message) message.innerText = err.message;
+                showNotification(err.message, 'error');
+            }
+        });
+    }
+});
 
+async function loadEnvironments() {
+    try {
+        const res = await fetch(`${API_BASE}/api/environments`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const environments = await res.json();
 
-        // Send to backend API
-        fetch(API_BASE + '/api/environments', {
+        const tbody = document.getElementById('environmentsTable');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (environments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">No active environments found.</td></tr>';
+            return;
+        }
+
+        environments.forEach(env => {
+            const statusClass = env.status === 'Running' ? 'success' : 'running';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${escapeHtml(env.environment)}</strong></td>
+                <td>${escapeHtml(env.project_name)}</td>
+                <td>${escapeHtml(env.cloud)} / ${escapeHtml(env.region)}</td>
+                <td>${escapeHtml(env.instance)}</td>
+                <td><code style="color:#38bdf8; font-size:12px;">${escapeHtml(env.endpoint_url || '10.0.x.x')}</code></td>
+                <td><span class="status ${statusClass}">${escapeHtml(env.status)}</span></td>
+                <td>
+                    <button class="delete-btn" onclick="terminateEnvironment('${env.id}', '${escapeJsString(env.environment)}', '${escapeJsString(env.project_name)}')">
+                        Terminate
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (err) {
+        console.error('[CLIENT] Failed to load environments:', err.message);
+    }
+}
+
+async function terminateEnvironment(id, envName, projName) {
+    if (!confirm(`Are you sure you want to terminate ${envName} environment for ${projName}?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/api/environments/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ? data.error.message : 'Termination failed');
+
+        showNotification(`${envName} environment for ${projName} terminated.`);
+        loadEnvironments();
+        loadDashboard();
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
+}
+
+/* =============================================
+   DEPLOYMENTS
+============================================= */
+
+function openDeployModal(preselectedProject = '') {
+    const modal = document.getElementById('deployModal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+    const select = document.getElementById('deployModalProject');
+    if (select && preselectedProject) {
+        select.value = preselectedProject;
+    }
+}
+
+function closeDeployModal() {
+    const modal = document.getElementById('deployModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Deploy Modal Form Submit
+document.addEventListener('DOMContentLoaded', () => {
+    const deployForm = document.getElementById('deployModalForm');
+    if (deployForm) {
+        deployForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const projectName = document.getElementById('deployModalProject').value;
+            const environment = document.getElementById('deployModalEnv').value;
+            const version     = document.getElementById('deployModalVersion').value.trim() || 'v1.0.0';
+
+            closeDeployModal();
+            triggerDeployment(projectName, environment, version);
+        });
+    }
+});
+
+async function triggerDeployment(projectName, environment = 'Development', version = 'v1.0.0') {
+    try {
+        showNotification(`Starting deployment for ${projectName} (${environment})...`);
+
+        const res = await fetch(`${API_BASE}/api/deployments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 project_name: projectName,
-                environment:  environment,
-                cloud:        cloud,
-                region:       region,
-                instance:     instance,
-                docker:       docker,
-                description:  description
+                environment,
+                version
             })
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(env) {
-
-            // Simulate slight delay for UX
-            setTimeout(function() {
-
-                title.innerText =
-                    "Environment Created Successfully ✓";
-
-                message.innerText =
-                    projectName + " - " + environment +
-                    " environment is now running on " + cloud + ".";
-
-                statusDiv.classList.add("provision-success");
-
-                // Refresh dashboard stats
-                loadDashboard();
-
-            }, 1500);
-        })
-        .catch(function(err) {
-
-            title.innerText   = "Provisioning Failed ✗";
-            message.innerText = "Error: " + err.message;
-
-            console.error('Provision error:', err);
         });
-    });
 
+        const deployment = await res.json();
+        if (!res.ok) {
+            throw new Error(deployment.error ? deployment.error.message : 'Failed to launch deployment');
+        }
 
-/* =========================================
-   DEPLOYMENTS - Load & Create
-========================================= */
-
-function loadDeployments() {
-
-    fetch(API_BASE + '/api/deployments')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(deployments) {
-
-            var tbody = document.getElementById("allDeployments");
-            tbody.innerHTML = '';
-
-            deployments.forEach(function(dep) {
-
-                var statusClass = dep.status === 'Success'
-                    ? 'success'
-                    : (dep.status === 'Running' ? 'running' : 'failed');
-
-                var row = document.createElement("tr");
-
-                row.innerHTML =
-                    '<td>#' + dep.dep_number + '</td>' +
-                    '<td>' + dep.project_name + '</td>' +
-                    '<td>' + dep.environment + '</td>' +
-                    '<td>' + dep.version + '</td>' +
-                    '<td><span class="status ' + statusClass + '">' +
-                        dep.status +
-                    '</span></td>' +
-                    '<td>' +
-                        '<button class="small-btn" onclick="viewLogs()">Logs</button>' +
-                    '</td>';
-
-                tbody.appendChild(row);
-            });
-        })
-        .catch(function(err) {
-            console.error('Failed to load deployments:', err);
-        });
-}
-
-
-function deployProject(projectName) {
-
-    fetch(API_BASE + '/api/deployments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            project_name: projectName,
-            environment: 'Development',
-            version: 'v1.0.0'
-        })
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function(deployment) {
-
-        // Show notification
-        showNotification('Deployment started for ' + projectName);
-
-        // Refresh deployment list
+        showNotification(`Deployment #${deployment.dep_number} initiated!`);
         loadDeployments();
         loadDashboard();
 
-
-        // Simulate deployment completing after 3 seconds
-        setTimeout(function() {
-
-            fetch(API_BASE + '/api/deployments/' + deployment.id + '/status', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'Success' })
-            })
-            .then(function() {
-
-                showNotification(projectName + ' deployed successfully!');
-
-                loadDeployments();
-                loadDashboard();
-            });
-
-        }, 3000);
-    })
-    .catch(function(err) {
-        console.error('Failed to deploy:', err);
-        alert('Failed to deploy ' + projectName);
-    });
+        // Start live polling to follow server-side pipeline progress
+        startPollingDeployments();
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
 }
 
+async function loadDeployments() {
+    try {
+        const res = await fetch(`${API_BASE}/api/deployments`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const deployments = await res.json();
 
-/* =========================================
-   LOGS - Load, Add & Clear
-========================================= */
+        const tbody = document.getElementById('allDeployments');
+        if (!tbody) return;
 
-function loadLogs() {
+        tbody.innerHTML = '';
+        if (deployments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No deployments recorded yet.</td></tr>';
+            return;
+        }
 
-    fetch(API_BASE + '/api/logs')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(logs) {
+        let hasActiveDeployments = false;
 
-            var terminalBody =
-                document.querySelector(".terminal-body");
+        deployments.forEach(dep => {
+            if (dep.status === 'Building' || dep.status === 'Deploying' || dep.status === 'Running') {
+                hasActiveDeployments = true;
+            }
 
-            terminalBody.innerHTML = '';
-
-            logs.forEach(function(log) {
-
-                var p = document.createElement("p");
-
-                if (log.level === 'success') {
-                    p.className = 'success-text';
-                    p.textContent = '✓ ' + log.message;
-                } else {
-                    p.innerHTML =
-                        '<span class="green-text">$</span> ' +
-                        formatLogTime(log.created_at) + ' - ' +
-                        log.message;
-                }
-
-                terminalBody.appendChild(p);
-            });
-
-            // Scroll to bottom
-            terminalBody.scrollTop = terminalBody.scrollHeight;
-        })
-        .catch(function(err) {
-            console.error('Failed to load logs:', err);
+            const statusClass = getStatusClass(dep.status);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>#${escapeHtml(dep.dep_number)}</strong></td>
+                <td>${escapeHtml(dep.project_name)}</td>
+                <td>${escapeHtml(dep.environment)}</td>
+                <td><code>${escapeHtml(dep.version)}</code></td>
+                <td>
+                    <span class="status ${statusClass}">
+                        ${escapeHtml(dep.status)} ${dep.current_stage && dep.status !== 'Success' && dep.status !== 'Failed' ? `(${escapeHtml(dep.current_stage)})` : ''}
+                    </span>
+                </td>
+                <td>
+                    <button class="small-btn" onclick="viewLogs()">Logs</button>
+                </td>
+            `;
+            tbody.appendChild(row);
         });
+
+        // Continue polling if deployments are actively running
+        if (hasActiveDeployments) {
+            startPollingDeployments();
+        } else if (deploymentPollingTimer) {
+            clearInterval(deploymentPollingTimer);
+            deploymentPollingTimer = null;
+        }
+    } catch (err) {
+        console.error('[CLIENT] Failed to load deployments:', err.message);
+    }
 }
 
+function startPollingDeployments() {
+    if (deploymentPollingTimer) return;
+    deploymentPollingTimer = setInterval(() => {
+        loadDeployments();
+        loadDashboard();
+    }, 1500);
+}
 
-function clearLogs() {
+/* =============================================
+   LOGS
+============================================= */
 
-    fetch(API_BASE + '/api/logs', {
-        method: 'DELETE'
-    })
-    .then(function() {
+async function loadLogs(searchQuery = '') {
+    try {
+        let url = `${API_BASE}/api/logs?limit=80`;
+        if (searchQuery && searchQuery.trim() !== '') {
+            url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const logs = await res.json();
+
+        const terminalBody = document.querySelector('.terminal-body');
+        if (!terminalBody) return;
+
+        terminalBody.innerHTML = '';
+        if (logs.length === 0) {
+            terminalBody.innerHTML = '<p style="color:#64748b;">No logs recorded yet.</p>';
+            return;
+        }
+
+        logs.forEach(log => {
+            const p = document.createElement('p');
+            const timeStr = formatLogTime(log.created_at);
+
+            if (log.level === 'success') {
+                p.className = 'success-text';
+                p.textContent = `✓ [${timeStr}] ${log.message}`;
+            } else if (log.level === 'error') {
+                p.style.color = '#ef4444';
+                p.textContent = `✗ [${timeStr}] ${log.message}`;
+            } else {
+                p.innerHTML = `<span class="green-text">$</span> [${timeStr}] ${escapeHtml(log.message)}`;
+            }
+
+            terminalBody.appendChild(p);
+        });
+
+        terminalBody.scrollTop = terminalBody.scrollHeight;
+    } catch (err) {
+        console.error('[CLIENT] Failed to load logs:', err.message);
+    }
+}
+
+function filterLogs() {
+    clearTimeout(logFilterDebounce);
+    logFilterDebounce = setTimeout(() => {
+        const input = document.getElementById('logSearchInput');
+        loadLogs(input ? input.value : '');
+    }, 300);
+}
+
+async function clearLogs() {
+    try {
+        const res = await fetch(`${API_BASE}/api/logs`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         loadLogs();
-    })
-    .catch(function(err) {
-        console.error('Failed to clear logs:', err);
-    });
+        showNotification('Console logs cleared.');
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
 }
 
+/* =============================================
+   SETTINGS
+============================================= */
 
-/* =========================================
-   SETTINGS - Load & Update
-========================================= */
+async function loadSettings() {
+    try {
+        const res = await fetch(`${API_BASE}/api/settings`);
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const settings = await res.json();
 
-function loadSettings() {
+        const container = document.getElementById('settingsContainer');
+        if (!container) return;
 
-    fetch(API_BASE + '/api/settings')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(settings) {
+        container.innerHTML = '';
 
-            var container =
-                document.getElementById("settingsContainer");
+        const settingsConfig = {
+            github:    { title: 'GitHub Integration',  desc: 'Connected to source code repositories and webhooks.' },
+            jenkins:   { title: 'Jenkins CI/CD',       desc: 'Continuous Integration & build pipeline controller.' },
+            docker:    { title: 'Docker Platform',     desc: 'Local container runtime and image registry daemon.' },
+            terraform: { title: 'Terraform Engine',    desc: 'Infrastructure-as-Code state and cloud provider manager.' }
+        };
 
-            if (!container) return;
-
-            container.innerHTML = '';
-
-            var settingsConfig = {
-                github:    { title: 'GitHub Integration',  desc: 'Connect your GitHub repositories.' },
-                jenkins:   { title: 'Jenkins',             desc: 'Continuous Integration server.' },
-                docker:    { title: 'Docker',              desc: 'Container platform.' },
-                terraform: { title: 'Terraform',           desc: 'Infrastructure provisioning tool.' }
+        Object.keys(settings).forEach(key => {
+            const config = settingsConfig[key] || {
+                title: capitalise(key),
+                desc: 'Integrated system configuration.'
             };
 
-            Object.keys(settings).forEach(function(key) {
-
-                var config = settingsConfig[key] || {
-                    title: capitalise(key),
-                    desc: ''
-                };
-
-                var div = document.createElement("div");
-                div.className = "setting";
-
-                div.innerHTML =
-                    '<div>' +
-                        '<h3>' + config.title + '</h3>' +
-                        '<p>' + config.desc + '</p>' +
-                    '</div>' +
-                    '<span class="status success">' +
-                        settings[key] +
-                    '</span>';
-
-                container.appendChild(div);
-            });
-        })
-        .catch(function(err) {
-            console.error('Failed to load settings:', err);
+            const div = document.createElement('div');
+            div.className = 'setting';
+            div.innerHTML = `
+                <div>
+                    <h3>${escapeHtml(config.title)}</h3>
+                    <p>${escapeHtml(config.desc)}</p>
+                </div>
+                <span class="status success">${escapeHtml(settings[key])}</span>
+            `;
+            container.appendChild(div);
         });
+    } catch (err) {
+        console.error('[CLIENT] Failed to load settings:', err.message);
+    }
 }
 
+/* =============================================
+   NOTIFICATION TOASTS
+============================================= */
 
-/* =========================================
-   NOTIFICATIONS
-========================================= */
-
-function showNotification(message) {
-
-    // Remove existing notification if any
-    var existing = document.querySelector('.notification');
+function showNotification(message, type = 'success') {
+    const existing = document.querySelector('.notification');
     if (existing) existing.remove();
 
-    var notif = document.createElement("div");
-    notif.className = "notification";
+    const notif = document.createElement('div');
+    notif.className = 'notification';
+    if (type === 'error') {
+        notif.style.background = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+        notif.style.boxShadow = '0 8px 30px rgba(239, 68, 68, 0.4)';
+    }
     notif.textContent = message;
 
     document.body.appendChild(notif);
 
-    // Trigger animation
-    setTimeout(function() {
-        notif.classList.add("show");
-    }, 10);
-
-    // Auto-hide after 3 seconds
-    setTimeout(function() {
-        notif.classList.remove("show");
-
-        setTimeout(function() {
-            notif.remove();
-        }, 300);
-    }, 3000);
+    setTimeout(() => notif.classList.add('show'), 10);
+    setTimeout(() => {
+        notif.classList.remove('show');
+        setTimeout(() => notif.remove(), 300);
+    }, 3200);
 }
 
-
-/* =========================================
-   HELPER FUNCTIONS
-========================================= */
+/* =============================================
+   HELPERS & UTILITIES
+============================================= */
 
 function viewLogs() {
-    showSection("logs");
+    showSection('logs');
 }
 
+function safeSetText(elemId, text) {
+    const elem = document.getElementById(elemId);
+    if (elem) elem.innerText = text;
+}
+
+function getStatusClass(status) {
+    if (status === 'Success' || status === 'Active' || status === 'Running') return 'success';
+    if (status === 'Building' || status === 'Deploying' || status === 'Pending') return 'running';
+    return 'failed';
+}
 
 function getTimeAgo(dateStr) {
+    if (!dateStr) return 'Just now';
+    const now = new Date();
+    const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+    const diff = Math.floor((now - date) / 1000);
 
-    var now  = new Date();
-    var date = new Date(dateStr + 'Z'); // SQLite stores UTC
-    var diff = Math.floor((now - date) / 1000);
-
-    if (diff < 60)   return diff + ' sec ago';
-    if (diff < 3600)  return Math.floor(diff / 60) + ' min ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + ' hour ago';
-
-    return Math.floor(diff / 86400) + ' days ago';
+    if (diff < 60)   return `${diff <= 0 ? 1 : diff}s ago`;
+    if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
 }
-
 
 function formatLogTime(dateStr) {
-
-    var date = new Date(dateStr + 'Z');
-
-    return date.toLocaleTimeString();
+    if (!dateStr) return new Date().toLocaleTimeString();
+    const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
+    return isNaN(date.getTime()) ? new Date().toLocaleTimeString() : date.toLocaleTimeString();
 }
 
-
 function capitalise(str) {
+    if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-
-function escapeQuotes(str) {
-    return str.replace(/'/g, "\\'");
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
+function escapeJsString(str) {
+    if (!str) return '';
+    return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
 
-/* =========================================
-   PAGE LOAD - Initialise from Backend
-========================================= */
+/* =============================================
+   BOOTSTRAP
+============================================= */
 
-document.addEventListener("DOMContentLoaded", function() {
-
-    // Load dashboard data from API
+document.addEventListener('DOMContentLoaded', () => {
     loadDashboard();
-
-    // Pre-load projects for provision dropdown
-    fetch(API_BASE + '/api/projects')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(projects) {
-            updateProjectDropdown(projects);
-        })
-        .catch(function(err) {
-            console.error('Failed to load initial projects:', err);
-        });
+    loadProjects();
 });
