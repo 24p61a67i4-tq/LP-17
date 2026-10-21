@@ -6,12 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test_backend.js"
+    "test": "node test_backend.js",
+    "test:selenium": "node tests/selenium/deployment_test.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "sql.js": "^1.11.0",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "selenium-webdriver": "^4.51.0",
+    "sql.js": "^1.11.0",
     "uuid": "^11.1.0"
   }
 }

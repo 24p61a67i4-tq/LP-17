@@ -11,6 +11,7 @@ WORKDIR /app
 # Configure production environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOST_PORT=8085
 ENV DB_PATH=/app/data/oneclick.sqlite
 
 # Create directory for persistent volume mounts and set permissions

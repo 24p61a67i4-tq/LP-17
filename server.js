@@ -86,12 +86,15 @@ async function startServer(port = config.port) {
     // 2. Start Express HTTP Listener
     return new Promise((resolve) => {
         serverInstance = app.listen(port, () => {
+            const hostPort = config.hostPort || 8085;
             console.log('');
             console.log('  ⚡ OneClick DevOps Server is running!');
-            console.log(`  🚀 URL:        http://localhost:${port}`);
-            console.log(`  🩺 Health:     http://localhost:${port}/api/health`);
-            console.log(`  💾 Database:   SQLite (${config.dbPath})`);
-            console.log(`  🛡️  Environment: ${config.env}`);
+            console.log(`  🚀 Container URL: http://localhost:${port}`);
+            console.log(`  🌐 Host URL:      http://localhost:${hostPort}`);
+            console.log(`  🩺 Container Health: http://localhost:${port}/api/health`);
+            console.log(`  🩺 Host Health:      http://localhost:${hostPort}/api/health`);
+            console.log(`  💾 Database: SQLite (${config.dbPath})`);
+            console.log(`  🛡️ Environment: ${config.env}`);
             console.log('');
             resolve(serverInstance);
         });

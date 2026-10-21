@@ -5,8 +5,11 @@
 const path = require('path');
 
 const config = {
-    // Server Port
+    // Server Port (internal container listening port)
     port: parseInt(process.env.PORT || '3000', 10),
+
+    // Host Port (external host mapped port for Docker)
+    hostPort: parseInt(process.env.HOST_PORT || '8085', 10),
 
     // Node Environment
     env: process.env.NODE_ENV || 'development',
